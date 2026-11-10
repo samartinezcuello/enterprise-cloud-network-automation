@@ -14,6 +14,7 @@ resource "aws_vpc" "hub_vpc" {
 
 # Subnet Pública (para Internet Gateway)
 resource "aws_subnet" "public_subnet_1" {
+  # checkov:skip=CKV2_AWS_130: Subnet pública configurada intencionalmente con asignación de IP pública
   vpc_id                  = aws_vpc.hub_vpc.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 4, 0) # 10.0.0.0/20
   availability_zone       = "us-east-1a"

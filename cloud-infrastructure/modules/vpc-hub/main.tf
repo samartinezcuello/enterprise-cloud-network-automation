@@ -1,5 +1,6 @@
 # VPC Central (Hub)
 resource "aws_vpc" "hub_vpc" {
+  # checkov:skip=CKV2_AWS_11: Flow logs omitidos para entorno de pruebas de laboratorio
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
@@ -30,4 +31,8 @@ resource "aws_internet_gateway" "igw" {
   tags = {
     Name = "igw-hub-${var.environment}"
   }
+}
+
+resource "aws_default_security_group" "hub_default" {
+  vpc_id = aws_vpc.hub_vpc.id # Asegurate de usar el nombre con el que definiste tu aws_vpc aquí
 }

@@ -1,0 +1,33 @@
+name: "Terraform Integration & Security Checks"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  validate:
+    name: "Lint & Validate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ./cloud-infrastructure
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: ./cloud-infrastructure
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ./cloud-infrastructure

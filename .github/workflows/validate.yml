@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: "Lint & Validate"
+    name: "Lint & Security Scans"
     runs-on: ubuntu-latest
 
     steps:
@@ -19,6 +19,11 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.5"
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.66.0
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
@@ -31,3 +36,16 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
         working-directory: ./cloud-infrastructure
+
+      - name: Run TFLint
+        run: |
+          tflint --init
+          tflint -f compact
+        working-directory: ./cloud-infrastructure
+
+      - name: Run Checkov Security Scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          framework: terraform
+          directory: cloud-infrastructure
+          soft_fail: true # Evita que falle el pipeline completo por alertas menores durante el desarrollo

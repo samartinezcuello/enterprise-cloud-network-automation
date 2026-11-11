@@ -2,26 +2,29 @@ name: "Terraform Integration & Security Checks"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
   validate:
     name: "Lint & Security Scans"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.7.5"
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: v0.66.0
 
@@ -39,13 +42,14 @@ jobs:
 
       - name: Run TFLint
         run: |
-          tflint --init
-          tflint -f compact
+          tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
+          tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl" -f compact
         working-directory: ./cloud-infrastructure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Run Checkov Security Scan
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@v12
         with:
           framework: terraform
           directory: cloud-infrastructure
-          soft_fail: true # Evita que falle el pipeline completo por alertas menores durante el desarrollo

@@ -1,10 +1,23 @@
-# Terraform local state
+# Terraform local state and artifacts
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored: commit it for reproducible provider versions.
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
+crash.log
+crash.*.log
+*.tfplan
+tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
-# Environment & Sensitive files
+# Variable files may contain sensitive values
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Environment & sensitive files
 *.pem
 *.key
 .env

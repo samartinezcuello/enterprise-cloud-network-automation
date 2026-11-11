@@ -1,5 +1,5 @@
 variable "environment" {
-  description = "Entorno de despliegue"
+  description = "Deployment environment name."
   type        = string
-  default     = "production"
+  default     = "lab"
 }

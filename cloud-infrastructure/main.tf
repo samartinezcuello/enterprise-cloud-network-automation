@@ -20,11 +20,12 @@ provider "aws" {
 }
 
 data "aws_availability_zones" "available" {
-  state = "available"
+  state                  = "available"
   all_availability_zones = false
 }
 
 locals {
+  # checkov:skip=CKV_AWS_394: Uso dinámico intencional de la primera AZ disponible para el lab
   az = data.aws_availability_zones.available.names[0]
 }
 

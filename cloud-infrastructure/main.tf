@@ -19,14 +19,10 @@ provider "aws" {
   }
 }
 
-data "aws_availability_zones" "available" {
-  state                  = "available"
-  all_availability_zones = false
-}
-
 locals {
-  # checkov:skip=CKV_AWS_394: Uso dinámico intencional de la primera AZ disponible para el lab
-  az = data.aws_availability_zones.available.names[0]
+  # Pinned availability zone: avoids relying on the ordering of a data source result,
+  # which could change and force subnet recreation if AWS adds a zone.
+  az = "${var.region}${var.az_suffix}"
 }
 
 # 1. Hub VPC: central network with internet egress

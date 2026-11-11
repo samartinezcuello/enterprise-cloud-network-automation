@@ -4,6 +4,12 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "az_suffix" {
+  description = "Availability zone letter appended to the region (for example 'a' gives us-east-1a)."
+  type        = string
+  default     = "a"
+}
+
 variable "project" {
   description = "Project name used as a tag on all resources."
   type        = string

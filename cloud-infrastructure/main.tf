@@ -116,3 +116,26 @@ resource "aws_ec2_transit_gateway_route" "default_to_hub" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub_attachment.id
   transit_gateway_route_table_id = module.transit_gateway.default_route_table_id
 }
+
+# ---------------------------------------------------------------------------
+# Optional test workload in the spoke (no public IP, no SSH: access via SSM)
+# SSM is reached through the centralized egress path (spoke -> TGW -> hub NAT)
+# ---------------------------------------------------------------------------
+module "spoke_test_instance" {
+  source = "./modules/test-instance"
+  count  = var.deploy_test_instance ? 1 : 0
+
+  name        = "spoke-test-${var.environment}"
+  environment = var.environment
+  vpc_id      = module.vpc_spoke.vpc_id
+  subnet_id   = module.vpc_spoke.private_subnet_id
+
+  depends_on = [aws_route.spoke_default_to_tgw]
+}
+
+check "test_instance_needs_egress" {
+  assert {
+    condition     = !var.deploy_test_instance || var.enable_nat_gateway
+    error_message = "The test instance reaches SSM through the hub NAT Gateway: set enable_nat_gateway = true."
+  }
+}

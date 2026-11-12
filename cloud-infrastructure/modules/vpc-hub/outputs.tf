@@ -22,3 +22,9 @@ output "nat_gateway_id" {
   description = "ID of the NAT Gateway (null when disabled)."
   value       = try(aws_nat_gateway.nat[0].id, null)
 }
+
+
+output "nat_public_ip" {
+  description = "Public IP of the NAT Gateway (null when disabled)."
+  value       = try(aws_eip.nat[0].public_ip, null)
+}

@@ -41,6 +41,8 @@ flowchart LR
 │       ├── vpc-hub/               Hub VPC, subnets, route tables, IGW, optional NAT
 │       ├── vpc-spoke/             Spoke VPC, private subnet, route table
 │       └── transit-gateway/       Transit Gateway
+│       └── test-instance/         Optional test workload (SSM access only, no SSH)
+├── scripts/verify_connectivity.py Post-deploy verification (Python/boto3)
 ├── .github/workflows/validate.yml CI pipeline
 └── .tflint.hcl                    TFLint configuration (terraform + AWS rulesets)
 ```
@@ -76,6 +78,27 @@ terraform apply
 ```
 
 Requires Terraform >= 1.5 and AWS credentials configured locally. Set `-var="enable_nat_gateway=true"` to test centralized egress.
+
+## Verification
+
+After `terraform apply`, a Python script checks the deployment through the AWS API:
+
+```bash
+pip install -r scripts/requirements.txt
+python scripts/verify_connectivity.py
+```
+
+It verifies that both Transit Gateway attachments are `available`, that the VPC route tables contain the expected routes through the Transit Gateway, and (with the test instance enabled) that the spoke leaves to the Internet with the public IP of the hub NAT Gateway, which proves the full centralized-egress path.
+
+To run the complete test, including egress:
+
+```bash
+cd cloud-infrastructure
+terraform apply -var="enable_nat_gateway=true" -var="deploy_test_instance=true"
+cd .. && python scripts/verify_connectivity.py
+```
+
+The test instance has no public IP and no inbound rules; it is managed through AWS Systems Manager Session Manager.
 
 ## Cost and cleanup
 

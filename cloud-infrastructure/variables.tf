@@ -39,3 +39,9 @@ variable "enable_nat_gateway" {
   type        = bool
   default     = false
 }
+
+variable "deploy_test_instance" {
+  description = "Create a small test instance in the spoke (reachable only through SSM). Requires enable_nat_gateway = true."
+  type        = bool
+  default     = false
+}

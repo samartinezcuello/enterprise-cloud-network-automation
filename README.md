@@ -114,7 +114,7 @@ terraform destroy
 - [x] CI: fmt, validate, TFLint, Checkov
 - [x] VPC routing and optional centralized egress (NAT Gateway)
 - [x] Test instances in the spoke reachable only through SSM Session Manager (no SSH exposure)
-- [x] Connectivity tests (Python/boto3 and Ansible)
+- [ ] Connectivity tests (Python/boto3 and Ansible)
 - [ ] VPC Flow Logs
 - [ ] Second spoke with custom Transit Gateway route tables (segmentation)
 - [ ] Approval-gated apply/destroy from GitHub Actions using OIDC (no stored credentials)

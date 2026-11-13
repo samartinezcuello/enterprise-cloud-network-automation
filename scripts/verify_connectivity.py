@@ -4,7 +4,8 @@
 Checks:
   1. Both Transit Gateway attachments are in the "available" state.
   2. The VPC route tables contain the expected routes through the Transit Gateway.
-  3. (Optional) Centralized egress: the spoke test instance, reached through SSM,
+  3. VPC Flow Logs are active on both VPCs.
+  4. (Optional) Centralized egress: the spoke test instance, reached through SSM,
      must leave to the Internet with the public IP of the hub NAT Gateway.
 
 Usage (from the repository root, with AWS credentials configured):
@@ -104,6 +105,21 @@ def check_routes(ec2, report, out):
         report.add(f"Route {label}", ok, f"{cidr} via {tgw_id} in {route_table_id}")
 
 
+def check_flow_logs(ec2, report, vpc_ids):
+    """Each VPC must have an active flow log that is not failing to deliver."""
+    response = ec2.describe_flow_logs(Filters=[{"Name": "resource-id", "Values": vpc_ids}])
+    by_vpc = {log["ResourceId"]: log for log in response["FlowLogs"]}
+    for vpc_id in vpc_ids:
+        log = by_vpc.get(vpc_id)
+        ok = (
+            log is not None
+            and log["FlowLogStatus"] == "ACTIVE"
+            and log.get("DeliverLogsStatus") != "FAILED"
+        )
+        detail = f"status={log['FlowLogStatus']}" if log else "no flow log found"
+        report.add(f"Flow logs {vpc_id}", ok, detail)
+     
+        
 def wait_for_ssm(ssm, instance_id):
     """Wait until the instance is registered and online in SSM."""
     deadline = time.time() + SSM_WAIT_SECONDS
@@ -170,6 +186,7 @@ def main():
     report = Report()
     check_attachments(ec2, report, [out["hub_attachment_id"], out["spoke_attachment_id"]])
     check_routes(ec2, report, out)
+    check_flow_logs(ec2, report, [out["hub_vpc_id"], out["spoke_vpc_id"]])
     check_egress(ssm, report, out)
     report.print()
     return 1 if report.failed else 0

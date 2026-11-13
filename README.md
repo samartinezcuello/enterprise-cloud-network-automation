@@ -115,6 +115,6 @@ terraform destroy
 - [x] VPC routing and optional centralized egress (NAT Gateway)
 - [x] Test instances in the spoke reachable only through SSM Session Manager (no SSH exposure)
 - [ ] Connectivity tests (Python/boto3 and Ansible)
-- [ ] VPC Flow Logs
+- [X] VPC Flow Logs
 - [ ] Second spoke with custom Transit Gateway route tables (segmentation)
 - [ ] Approval-gated apply/destroy from GitHub Actions using OIDC (no stored credentials)

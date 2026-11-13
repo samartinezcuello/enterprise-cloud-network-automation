@@ -1,6 +1,5 @@
 # Hub VPC (central transit network)
 resource "aws_vpc" "hub_vpc" {
-  # checkov:skip=CKV2_AWS_11: VPC Flow Logs pending, planned for the observability phase
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
@@ -117,4 +116,20 @@ resource "aws_route" "tgw_subnet_default_to_nat" {
   route_table_id         = aws_route_table.tgw.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.nat[0].id
+}
+
+
+# VPC Flow Logs: all traffic (accepted and rejected) to CloudWatch Logs
+resource "aws_flow_log" "hub" {
+  vpc_id                   = aws_vpc.hub_vpc.id
+  traffic_type             = "ALL"
+  log_destination_type     = "cloud-watch-logs"
+  log_destination          = var.flow_log_destination_arn
+  iam_role_arn             = var.flow_log_role_arn
+  log_format               = var.flow_log_format
+  max_aggregation_interval = 60
+
+  tags = {
+    Name = "flow-log-hub-${var.environment}"
+  }
 }

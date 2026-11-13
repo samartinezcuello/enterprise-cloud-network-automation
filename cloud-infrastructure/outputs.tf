@@ -66,3 +66,8 @@ output "spoke_test_instance_id" {
   description = "ID of the spoke test instance (null when not deployed)."
   value       = try(module.spoke_test_instance[0].instance_id, null)
 }
+
+output "flow_log_group_name" {
+  description = "Name of the CloudWatch log group that receives the VPC flow logs."
+  value       = module.flow_logs.log_group_name
+}

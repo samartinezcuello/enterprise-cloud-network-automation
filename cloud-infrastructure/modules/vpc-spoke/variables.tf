@@ -14,3 +14,21 @@ variable "availability_zone" {
   description = "Availability zone for the spoke subnet."
   type        = string
 }
+
+# ---------------------------------------------------------------------------
+# Step - New module Flow Log
+# ---------------------------------------------------------------------------
+variable "flow_log_destination_arn" {
+  description = "ARN of the CloudWatch log group that receives the VPC flow logs."
+  type        = string
+}
+
+variable "flow_log_role_arn" {
+  description = "ARN of the IAM role used by VPC Flow Logs to write to the log group."
+  type        = string
+}
+
+variable "flow_log_format" {
+  description = "Custom flow log record format."
+  type        = string
+}

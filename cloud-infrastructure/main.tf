@@ -25,14 +25,25 @@ locals {
   az = "${var.region}${var.az_suffix}"
 }
 
+# 0. Flow logs infrastructure: KMS key, log group and IAM role shared by both VPCs
+module "flow_logs" {
+  source = "./modules/flow-logs"
+
+  name        = "hub-spoke-${var.environment}"
+  environment = var.environment
+}
+
 # 1. Hub VPC: central network with internet egress
 module "vpc_hub" {
   source = "./modules/vpc-hub"
 
-  vpc_cidr           = var.hub_vpc_cidr
-  environment        = var.environment
-  availability_zone  = local.az
-  enable_nat_gateway = var.enable_nat_gateway
+  vpc_cidr                 = var.hub_vpc_cidr
+  environment              = var.environment
+  availability_zone        = local.az
+  enable_nat_gateway       = var.enable_nat_gateway
+  flow_log_destination_arn = module.flow_logs.log_group_arn
+  flow_log_role_arn        = module.flow_logs.role_arn
+  flow_log_format          = module.flow_logs.log_format
 }
 
 # 2. Transit Gateway: central router
@@ -46,9 +57,12 @@ module "transit_gateway" {
 module "vpc_spoke" {
   source = "./modules/vpc-spoke"
 
-  vpc_cidr          = var.spoke_vpc_cidr
-  environment       = var.environment
-  availability_zone = local.az
+  vpc_cidr                 = var.spoke_vpc_cidr
+  environment              = var.environment
+  availability_zone        = local.az
+  flow_log_destination_arn = module.flow_logs.log_group_arn
+  flow_log_role_arn        = module.flow_logs.role_arn
+  flow_log_format          = module.flow_logs.log_format
 }
 
 # 4. Hub attachment (dedicated /28 subnet)

@@ -8,10 +8,10 @@ Hub-and-spoke network on AWS built entirely with Terraform: a central **hub VPC*
 
 ```mermaid
 flowchart LR
-    Internet((Internet)) --- IGW[Internet Gateway]
+    Internet((Internet)) --- IGW[Internet Gateway ]
 
     subgraph HUB["Hub VPC 10.0.0.0/16"]
-        IGW --- PUB["Public subnet<br/>NAT Gateway (optional)"]
+        IGW --- PUB["Public subnet<br/>NAT Gateway<br/>(optional)"]
         TGWSN["TGW attachment subnet /28"]
     end
 

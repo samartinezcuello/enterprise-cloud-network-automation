@@ -34,7 +34,8 @@ resource "aws_iam_instance_profile" "ssm" {
   role = aws_iam_role.ssm.name
 }
 
-# No inbound rules at all; outbound HTTPS only (SSM and the egress test)
+# Outbound HTTPS (SSM and the egress test) plus ICMP to/from the lab CIDRs (ping tests).
+# No other inbound rules.
 resource "aws_security_group" "this" {
   name        = "${var.name}-sg"
   description = "Test instance: no inbound, HTTPS outbound only"
@@ -52,6 +53,28 @@ resource "aws_vpc_security_group_egress_rule" "https" {
   from_port         = 443
   to_port           = 443
   cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "icmp" {
+  for_each = toset(var.icmp_peer_cidrs)
+
+  security_group_id = aws_security_group.this.id
+  description       = "ICMP from ${each.value} (connectivity tests)"
+  ip_protocol       = "icmp"
+  from_port         = -1
+  to_port           = -1
+  cidr_ipv4         = each.value
+}
+
+resource "aws_vpc_security_group_egress_rule" "icmp" {
+  for_each = toset(var.icmp_peer_cidrs)
+
+  security_group_id = aws_security_group.this.id
+  description       = "ICMP to ${each.value} (connectivity tests)"
+  ip_protocol       = "icmp"
+  from_port         = -1
+  to_port           = -1
+  cidr_ipv4         = each.value
 }
 
 resource "aws_instance" "this" {

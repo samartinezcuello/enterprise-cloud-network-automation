@@ -24,3 +24,9 @@ variable "instance_type" {
   type        = string
   default     = "t3.micro"
 }
+
+variable "icmp_peer_cidrs" {
+  description = "CIDRs allowed to ping the instance and that the instance may ping (connectivity tests)."
+  type        = list(string)
+  default     = []
+}

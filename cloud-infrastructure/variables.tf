@@ -28,10 +28,23 @@ variable "hub_vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "spoke_vpc_cidr" {
-  description = "CIDR block for the spoke VPC (must be a /16)."
-  type        = string
-  default     = "10.1.0.0/16"
+variable "spokes" {
+  description = "Spoke VPCs to create, keyed by a short name. Each CIDR must be a /16 and must not overlap with the hub or with other spokes."
+
+  type = map(object({
+    cidr = string
+  }))
+
+  default = {
+    a = { cidr = "10.1.0.0/16" }
+    b = { cidr = "10.2.0.0/16" }
+  }
+}
+
+variable "allow_spoke_to_spoke" {
+  description = "Allow traffic between spokes through the Transit Gateway. Default false: spokes are isolated from each other."
+  type        = bool
+  default     = false
 }
 
 variable "enable_nat_gateway" {
@@ -41,7 +54,7 @@ variable "enable_nat_gateway" {
 }
 
 variable "deploy_test_instance" {
-  description = "Create a small test instance in the spoke (reachable only through SSM). Requires enable_nat_gateway = true."
+  description = "Create a small test instance in every spoke (reachable only through SSM). Requires enable_nat_gateway = true."
   type        = bool
   default     = false
 }

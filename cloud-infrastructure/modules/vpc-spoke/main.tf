@@ -5,7 +5,7 @@ resource "aws_vpc" "spoke_vpc" {
   enable_dns_hostnames = true
 
   tags = {
-    Name        = "vpc-spoke-${var.environment}"
+    Name        = "vpc-spoke-${var.spoke_name}-${var.environment}"
     Environment = var.environment
     Role        = "Workload Spoke"
   }
@@ -16,19 +16,19 @@ resource "aws_default_security_group" "spoke_default" {
   vpc_id = aws_vpc.spoke_vpc.id
 
   tags = {
-    Name = "sg-spoke-default-locked-${var.environment}"
+    Name = "sg-spoke-${var.spoke_name}-default-locked-${var.environment}"
   }
 }
 
 # Private subnet for workloads (no direct internet gateway: everything goes through the TGW)
 resource "aws_subnet" "private_subnet_1" {
   vpc_id                  = aws_vpc.spoke_vpc.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 4, 0) # 10.1.0.0/20
+  cidr_block              = cidrsubnet(var.vpc_cidr, 4, 0) # first /20 of the spoke CIDR
   availability_zone       = var.availability_zone
   map_public_ip_on_launch = false
 
   tags = {
-    Name = "subnet-spoke-private-${var.availability_zone}"
+    Name = "subnet-spoke-${var.spoke_name}-private-${var.availability_zone}"
   }
 }
 
@@ -37,7 +37,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.spoke_vpc.id
 
   tags = {
-    Name = "rt-spoke-private-${var.environment}"
+    Name = "rt-spoke-${var.spoke_name}-private-${var.environment}"
   }
 }
 
@@ -57,6 +57,6 @@ resource "aws_flow_log" "spoke" {
   max_aggregation_interval = 60
 
   tags = {
-    Name = "flow-log-spoke-${var.environment}"
+    Name = "flow-log-spoke-${var.spoke_name}-${var.environment}"
   }
 }

@@ -8,10 +8,10 @@ Hub-and-spoke network on AWS built entirely with Terraform: a shared **hub / egr
 
 ```mermaid
 flowchart LR
-    Internet((Internet)) --- IGW[Internet Gateway]
+    Internet((Internet)) --- IGW[Internet<br/>Gateway]
 
     subgraph HUB["Hub / egress VPC 10.0.0.0/16"]
-        IGW --- PUB["Public subnet<br/>NAT Gateway (optional)"]
+        IGW --- PUB["Public subnet<br/>NAT Gateway<br/>(optional)"]
         TGWSN["TGW attachment subnet /28"]
     end
 
@@ -23,7 +23,7 @@ flowchart LR
         PRIVB["Private subnet<br/>workloads"]
     end
 
-    TGW{{"Transit Gateway<br/>route tables: hub and spokes"}}
+    TGW{{"Transit Gateway<br/>route tables:<br/>hub and spokes"}}
     TGWSN --- TGW
     PRIVA --- TGW
     PRIVB --- TGW

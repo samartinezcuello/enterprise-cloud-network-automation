@@ -2,12 +2,16 @@
 """Verify the hub-and-spoke lab after `terraform apply`.
 
 Checks:
-  1. Both Transit Gateway attachments are in the "available" state.
+  1. All Transit Gateway attachments (hub and every spoke) are in the "available" state.
   2. The VPC route tables contain the expected routes through the Transit Gateway.
-  3. VPC Flow Logs are active on both VPCs.
-  4. (Optional) Centralized egress: the spoke test instance, reached through SSM,
-     must leave to the Internet with the public IP of the hub NAT Gateway.
-
+  3. Transit Gateway segmentation: each attachment is associated with the right route table
+     and the spokes route table holds the expected routes (blackholes or propagated routes).
+  4. VPC Flow Logs are active on every VPC.
+  5. (Optional) Centralized egress: every spoke test instance, reached through SSM, must
+     leave to the Internet with the public IP of the hub NAT Gateway.
+  6. (Optional) Spoke isolation: a ping between two spoke instances must be blocked, or
+     succeed when allow_spoke_to_spoke is true.
+     
 Usage (from the repository root, with AWS credentials configured):
     pip install -r scripts/requirements.txt
     python scripts/verify_connectivity.py
@@ -92,19 +96,81 @@ def has_tgw_route(ec2, route_table_id, cidr, tgw_id):
 
 def check_routes(ec2, report, out):
     tgw_id = out["tgw_id"]
-    expected = [
-        ("spoke -> hub", out["spoke_private_route_table_id"], out["hub_vpc_cidr"]),
-        ("hub -> spoke", out["hub_public_route_table_id"], out["spoke_vpc_cidr"]),
-    ]
-    if out["nat_enabled"]:
-        expected.append(
-            ("spoke default route -> TGW", out["spoke_private_route_table_id"], "0.0.0.0/0")
-        )
+    expected = []
+    for name, spoke in out["spokes"].items():
+        rtb = spoke["private_route_table_id"]
+        expected.append((f"spoke {name} -> hub", rtb, out["hub_vpc_cidr"]))
+        expected.append((f"hub -> spoke {name}", out["hub_public_route_table_id"], spoke["cidr"]))
+        if out["nat_enabled"]:
+            expected.append((f"spoke {name} default route -> TGW", rtb, "0.0.0.0/0"))
     for label, route_table_id, cidr in expected:
         ok = has_tgw_route(ec2, route_table_id, cidr, tgw_id)
         report.add(f"Route {label}", ok, f"{cidr} via {tgw_id} in {route_table_id}")
 
 
+def tgw_routes(ec2, route_table_id):
+    """Routes of a Transit Gateway route table as {cidr: (state, type)}."""
+    response = ec2.search_transit_gateway_routes(
+        TransitGatewayRouteTableId=route_table_id,
+        Filters=[{"Name": "state", "Values": ["active", "blackhole"]}],
+    )
+    return {
+        route["DestinationCidrBlock"]: (route["State"], route["Type"])
+        for route in response["Routes"]
+    }
+
+
+def associated_attachments(ec2, route_table_id):
+    """IDs of the attachments associated with a Transit Gateway route table."""
+    response = ec2.get_transit_gateway_route_table_associations(
+        TransitGatewayRouteTableId=route_table_id
+    )
+    return {
+        association["TransitGatewayAttachmentId"]
+        for association in response["Associations"]
+        if association["State"] == "associated"
+    }
+
+
+def check_tgw_segmentation(ec2, report, out):
+    hub_rt = out["tgw_hub_route_table_id"]
+    spokes_rt = out["tgw_spokes_route_table_id"]
+    spokes = out["spokes"]
+
+    # 1. Each attachment is associated with exactly the route table it should use
+    report.add(
+        "TGW hub attachment -> hub route table",
+        associated_attachments(ec2, hub_rt) == {out["hub_attachment_id"]},
+        f"{out['hub_attachment_id']} in {hub_rt}",
+    )
+    spoke_attachments = {spoke["attachment_id"] for spoke in spokes.values()}
+    report.add(
+        "TGW spoke attachments -> spokes route table",
+        associated_attachments(ec2, spokes_rt) == spoke_attachments,
+        f"{len(spoke_attachments)} attachments in {spokes_rt}",
+    )
+
+    # 2. Routes of the spokes route table: the hub is reachable, other spokes depend on the policy
+    routes = tgw_routes(ec2, spokes_rt)
+    hub_state = routes.get(out["hub_vpc_cidr"], ("missing", ""))[0]
+    report.add("TGW spokes table has the hub route", hub_state == "active", f"{out['hub_vpc_cidr']}: {hub_state}")
+
+    wanted = "active" if out["allow_spoke_to_spoke"] else "blackhole"
+    for name, spoke in spokes.items():
+        state = routes.get(spoke["cidr"], ("missing", ""))[0]
+        report.add(
+            f"TGW spokes table, route to spoke {name}",
+            state == wanted,
+            f"{spoke['cidr']}: {state} (expected {wanted})",
+        )
+
+    # 3. The hub route table must know every spoke (return traffic)
+    hub_routes = tgw_routes(ec2, hub_rt)
+    for name, spoke in spokes.items():
+        state = hub_routes.get(spoke["cidr"], ("missing", ""))[0]
+        report.add(f"TGW hub table, route to spoke {name}", state == "active", f"{spoke['cidr']}: {state}")
+        
+        
 def check_flow_logs(ec2, report, vpc_ids):
     """Each VPC must have an active flow log that is not failing to deliver."""
     response = ec2.describe_flow_logs(Filters=[{"Name": "resource-id", "Values": vpc_ids}])
@@ -155,26 +221,68 @@ def run_shell(ssm, instance_id, command):
 
 
 def check_egress(ssm, report, out):
-    instance_id = out.get("spoke_test_instance_id")
+    """Every spoke instance must exit to the Internet with the hub NAT public IP.
+
+    Returns {spoke name: instance} for the instances that are online in SSM.
+    """
     nat_ip = out.get("hub_nat_public_ip")
-    if not instance_id or not nat_ip:
+    instances = {
+        name: spoke["test_instance_id"]
+        for name, spoke in out["spokes"].items()
+        if spoke.get("test_instance_id")
+    }
+    if not instances or not nat_ip:
         report.skip(
             "Centralized egress",
             "needs deploy_test_instance=true and enable_nat_gateway=true",
         )
+        return {}
+    online = {}
+    for name, instance_id in instances.items():
+        if not wait_for_ssm(ssm, instance_id):
+            report.add(
+                f"SSM registration spoke {name}",
+                False,
+                f"{instance_id} not online after {SSM_WAIT_SECONDS}s",
+            )
+            continue
+        report.add(f"SSM registration spoke {name}", True, instance_id)
+        online[name] = instance_id
+        status, observed_ip = run_shell(
+            ssm, instance_id, "curl -s --max-time 10 https://checkip.amazonaws.com"
+        )
+        report.add(
+            f"Centralized egress spoke {name} via hub NAT",
+            status == "Success" and observed_ip == nat_ip,
+            f"exits as {observed_ip or 'n/a'}, NAT EIP is {nat_ip}",
+        )
+    return online
+
+
+def check_isolation(ssm, report, out, online):
+    """Ping between every ordered pair of spokes: blocked, unless allow_spoke_to_spoke."""
+    allowed = out["allow_spoke_to_spoke"]
+    if len(online) < 2:
+        report.skip("Spoke isolation", "needs at least two online spoke test instances")
         return
-    if not wait_for_ssm(ssm, instance_id):
-        report.add("SSM registration", False, f"{instance_id} not online after {SSM_WAIT_SECONDS}s")
-        return
-    report.add("SSM registration", True, instance_id)
-    status, observed_ip = run_shell(
-        ssm, instance_id, "curl -s --max-time 10 https://checkip.amazonaws.com"
-    )
-    report.add(
-        "Centralized egress via hub NAT",
-        status == "Success" and observed_ip == nat_ip,
-        f"spoke exits as {observed_ip or 'n/a'}, NAT EIP is {nat_ip}",
-    )
+    for source, instance_id in online.items():
+        for target, spoke in out["spokes"].items():
+            target_ip = spoke.get("test_instance_ip")
+            if target == source or not target_ip:
+                continue
+            status, output = run_shell(ssm, instance_id, f"ping -c 3 -W 2 {target_ip}")
+            if status == "Success":
+                reachable = True
+            elif "100% packet loss" in output:
+                reachable = False
+            else:
+                report.add(f"Isolation {source} -> {target}", False, f"inconclusive: {status}")
+                continue
+            report.add(
+                f"Isolation {source} -> {target}",
+                reachable == allowed,
+                f"ping {'works' if reachable else 'blocked'} (expected {'works' if allowed else 'blocked'})",
+            )
 
 
 def main():
@@ -184,10 +292,16 @@ def main():
     ssm = session.client("ssm")
 
     report = Report()
-    check_attachments(ec2, report, [out["hub_attachment_id"], out["spoke_attachment_id"]])
+    spokes = out["spokes"]
+    attachment_ids = [out["hub_attachment_id"]] + [s["attachment_id"] for s in spokes.values()]
+    vpc_ids = [out["hub_vpc_id"]] + [s["vpc_id"] for s in spokes.values()]
+
+    check_attachments(ec2, report, attachment_ids)
     check_routes(ec2, report, out)
-    check_flow_logs(ec2, report, [out["hub_vpc_id"], out["spoke_vpc_id"]])
-    check_egress(ssm, report, out)
+    check_tgw_segmentation(ec2, report, out)
+    check_flow_logs(ec2, report, vpc_ids)
+    online = check_egress(ssm, report, out)
+    check_isolation(ssm, report, out, online)
     report.print()
     return 1 if report.failed else 0
 
